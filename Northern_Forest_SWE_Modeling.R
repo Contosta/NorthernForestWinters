@@ -2,13 +2,13 @@
 ##################################################################################################################################################################
 ##################################################################################################################################################################
 #This script calculates uses the hydromad model in the R package http://hydromad.catchment.org/
-#to estimate snowater equilavent (SWE) from temperature and precipitation data
+#to estimate snow water equilavent (SWE) from daily mean temperature and daily total precipitation data
 #and then to use temperature thresholds that best predicted SWE to partition total precipitation into
 #snowfall and rainfall
 
 #There are four main steps: 
 
-#1. Gap fill temperature and precipitation data since the model won't run with NAs
+#1. Gap fill daily mean temperature and daily total precipitation data since the model won't run with NAs
 #2. Model set-up
 #3. Run model and merge results with metsub data.frame
 #4. Validate model and partition precipitation into rainfall and snowfall
@@ -41,7 +41,7 @@ metsub <- read.table("daily_station_data.csv", head = TRUE, sep = ",", na.string
 #1. Gap fill temperature and precipitation data since the model won't run with NAs
 ####################################################################################
 
-#create new columns for nation and SNOWFALL as SWE,
+#create new columns for nation (NAT; Canada [CA] or United States [US])
 #where Canadian snowfall data are SWE and US data are converted from total precip but constrained by 
 #whether or not TMEAN was < 0
 
@@ -62,7 +62,7 @@ metsub$TMEAN3 = ifelse(is.na(metsub$TMEAN2) == T, na.approx(metsub$TMEAN2, na.rm
 metsub$PRCP2 = ifelse(is.na(metsub$PRCPfin) == T, metsub$PRCP, metsub$PRCPfin)
 
 #estimate precipitation from snowfall records, using raw SWE if NAT = CAN or SNOW / 10 if NAT = US 
-#(assumes a snow density of 100 kg / m3)
+#(assumes a snow to liquid ratio of 10:1)
 
 metsub$PRCP3 = ifelse(is.na(metsub$PRCP) == T & is.na(metsub$SNOW) == F & metsub$NAT == "US", metsub$SNOW / 10,
                ifelse(is.na(metsub$PRCP) == T & is.na(metsub$SNOW) == F & metsub$NAT == "CAN", metsub$SNOW,
@@ -94,8 +94,8 @@ er.ind <- seq_along(metsubb$SiteYr)[end.rows]
 print(length(sr.ind))
 print(length(er.ind))
 
-#create vectors with all possible values for temperature thresholds for rainfall (Tmax) and snowmelt (Tmin)
-#and all possible values for melt coefficient (kd)
+#create vectors with all possible values for temperature thresholds (-2ºC to +2ºC) for rainfall (Tmax) and snowmelt (Tmin)
+#and all possible values for melt coefficient (kd), which determines the rate of melt (mm d-1)
 Tmax = seq(-2, 2, by = 1)
 Tmin = seq(-2, 2, by = 1)
 kd = seq(0, 4, by = 1)
@@ -128,17 +128,22 @@ pars = subset(pars, !duplicated(pars$id))
 #subset to only include Tmax, Tmin, and kd
 pars = pars[ , c("Tmax", "Tmin", "kd")]
 
-#transpose so that columns become rows (makes it easier to fill WEI)
+#transpose so that columns become rows (makes it easier to fill WEI; 
+#WEI = water equivalent of ice, which is the variable name for SWE in the hydromad model)
 pars = t(pars)
 
-#create container to hold results of model. WEI = water equivalent of ice
+#create container to hold results of model. 
 WEI = data.frame(matrix(nrow = nrow(metsubb), ncol = ncol(pars)))
 
 ####################################################################################
-#3. Run model and merge results with metsub data.frame
+#3. Run hydromad snowsim model and merge results with metsub data.frame
 ####################################################################################
 
-#begin loop
+#run model, looping over each site x winter year combination and each unique set of parameter combinations
+#the site x winter year combination loops across rows, with each unique chunk identified with 
+#sr.ind (start row indices) and er.ind (end row indices)
+#the unique parameter combinations loop across columns (indices for "pars") 
+
 for (h in seq(1,length(sr.ind))) {
 
 P = ts(metsubb$PRCP4[sr.ind[h]:er.ind[h]])
@@ -179,7 +184,10 @@ names(metsubb.2) = names(metsubb.1)
 metsubb.3 = rbind(metsubb.1, metsubb.2)
 
 #change column names of predicted values to something more intuitive and consistent
+#where "predno" stands for prediction number
 pred = data.frame("predno" = c(1:50))
+#make all column names have two digits, i.e., 1 would change to 01 for downstream processing
+#where "prednam" stands for prediction name
 pred$prednam = ifelse(pred$predno < 10, paste("pred", 0, pred$predno, sep = ""), paste("pred", pred$predno, sep = ""))
 names(metsubb.3)[32:81] <- pred$prednam
 
@@ -187,7 +195,7 @@ names(metsubb.3)[32:81] <- pred$prednam
 #4. Validate model and partition precipitation into rainfall and snowfall
 ####################################################################################
 
-#omit all SNOW zero values since many zero values can result from people recording data
+#omit all SNWD zero values since many zero values can result from people recording data
 snoz.1 = metsubb.3[metsubb.3$SNWD > 0, ]
 
 #omit all NAs
@@ -234,13 +242,13 @@ metsubb.6 = merge(metsubb.5, pars, by.x = "mod_ID.s", by.y = "pred", all.x = T, 
 #sort by Site_ID, Winter Year, and doy2
 metsubb.6 = metsubb.6[order(metsubb.6$Site_ID, metsubb.6$WYear, metsubb.6$doy2), ]
 
-#calculate modeled snowfall
+#calculate modeled rainfall (mLIQ) and modeled snowfall (mSNOW)
 metsubb.6$mLIQ = ifelse(is.na(metsubb.6$PRCPfin) == T | is.na(metsubb.6$TMEAN) == T, NA,
                     ifelse(metsubb.6$TMEAN > metsubb.6$Tmax, metsubb.6$PRCPfin, 0))
 metsubb.6$mSNOW = ifelse(is.na(metsubb.6$PRCPfin) == T | is.na(metsubb.6$TMEAN) == T, NA,
                      ifelse(metsubb.6$TMEAN < metsubb.6$Tmin, metsubb.6$PRCPfin, 0))
 
-#compare modeled versus actual by nation (US = solid snow; Canada = liquid SWE)
+#compare modeled versus actual by nation (US = solid precipitation (snow); Canada = liquid precipitation(SWE))
 can = metsubb.6[metsubb.6$NAT == "CA" & metsubb.6$SNOW > 0 & metsubb.6$mSNOW > 0, ]
 us = metsubb.6[metsubb.6$NAT == "US" & metsubb.6$SNOW > 0 & metsubb.6$mSNOW > 0, ]
 
