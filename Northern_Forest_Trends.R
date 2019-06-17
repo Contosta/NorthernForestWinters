@@ -14,7 +14,7 @@
 #Code was developed by N. Casson, A. Contosta, and S. Nelson
 
 #the dataset required to run this script ("calcfin.csv") is located in this repository (with associated metadata)
-#and was produced by running the "Northern_Forest_Winter_Indicators_Eco_Apps" script along with the file
+#and was produced by running the "Northern_Forest_Winter_Indicators" script along with the file
 #"metfin.csv."
 
 ####################################################################################
@@ -29,7 +29,7 @@ library(trend)
 #read data
 calc.fin <- read.table("calcfin.csv", head = TRUE, sep = ",", na.strings=c("NA", "NAN"))
 
-#write function for sen slope
+#write function for sen slope Sen, P (1968). Estimated of the regression coefficient based on Kendall’s Tau. J Am Stat Assoc 39:1379-1389
 sen = function(x, y){
   xx = outer(x, x, "-")
   yy = outer(y, y, "-")
@@ -70,7 +70,8 @@ er.ind <- seq_along(calc.fin$Site_ID)[end.rows] - 1
 print(length(sr.ind))
 print(length(er.ind))
 
-#extract response variables (indicators or inds), predictor (WYear), and Site_ID
+#extract response variables (indicators or inds), predictor (WYear), and Site_ID, where WYear = Winter Year, or 
+#November 1 to October 31
 inds = calc.fin[ , -(1:5)]
 
 pred = calc.fin[ , "WYear"]
@@ -83,14 +84,18 @@ tau = data.frame(matrix(nrow = length(sr.ind), ncol = ncol(inds)))
 p.value = data.frame(matrix(nrow = length(sr.ind), ncol = ncol(inds)))
 slope = data.frame(matrix(nrow = length(sr.ind), ncol = ncol(inds)))
 
-#begin loop
+#begin loop over sites
 for (h in seq(1,length(sr.ind))) {
 
+#begin loop over indicators
 for (i in 1:ncol(inds)) {
 
+#make a data frame for each site x indicator 
 nn = data.frame(inds[sr.ind[h]:er.ind[h],i], pred[sr.ind[h]:er.ind[h]])
+#remove NA values (otherwise mk.test and sen won't work)
 nn. = nn[complete.cases(nn),]
 		if(nrow(nn.)>0 ){
+		  #calculate Kendall's tau and associated p, and Sen slope and write to tau, p.value, and slope containers
       tau[h,i] = mk.test(nn.[,1])$estimates[3]
       p.value[h,i] = mk.test(nn.[,1])$p.value
       slope[h,i] = sen(nn.[,2], nn.[,1])$slope
@@ -109,7 +114,9 @@ sum.tab.all = cbind(vars.1, tau, p.value, slope)
 write.table(sum.tab.all, file = paste("sumtab_all.csv"), sep = ",", na="NA", append=FALSE, col.names=TRUE, row.names = FALSE)
 
 ####################################################################################
-#2. Analyze trends across the entire northern forest region
+#2. Analyze trends across the entire northern forest region 
+    #using regional Mann Kendall and Sen slope analyses
+    #"Northern_Forest_Metadata.xlsx" includes defintions for each indicator
 ####################################################################################
 
 #make Site_ID the blocking factor
