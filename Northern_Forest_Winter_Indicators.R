@@ -4,6 +4,7 @@
 #This script calculates indicators of changing winters that are relevant for the ecosystems and people of
 #the northern forest region of northeastern North America for the manuscript "Northern forest winters have lost cold, snowy conditions that are important for 
 #ecosystems and human communities" published in Ecological Applications (doi:##################)
+#Definitions for each indicator are located in "Northern_Forest_Metadata.xlsx"
 
 
 #There are two main steps
@@ -99,25 +100,31 @@ Site_ID = unique(metfin$Site_ID)
 #paste LAT and LON together because there are duplicates of each
 LAT_LON = unique(paste(metfin$LAT, metfin$LON, sep = ","))
 
-#split the string to obtain correct numbers (37) for LAT and LON
+#split the string to obtain correct number of sites (n = 37) for LAT and LON
 spl_LAT_LON <- data.frame(do.call(rbind, str_split(LAT_LON, ",")))
 names(spl_LAT_LON) <- c("LAT", "LON")
 
-#unfactor the LAT and LON variables and convert back into numeric
+#unfactor the LAT and LON variables (convert categorical / factor variable back into numeric format)
 LAT = unfactor(spl_LAT_LON$LAT)
 LON = unfactor(spl_LAT_LON$LON)
 
+#create empty data.frame into which summary statistics will be added
 calc.ind = data.frame(matrix(data = NA, nrow =  length(WYear) * length(Site_ID), ncol = 4))
 names(calc.ind) = c("WYear", "Site_ID", "LAT", "LON")
 
+#populate data.frame with values for WYear (winter year)
 calc.ind$WYear = rep(WYear, nrow(calc.ind) / length(WYear))
+#sort data by WYear
 calc.ind = calc.ind[order(calc.ind$WYear), ]
+#populate data.frame with site ID, LAT, and LON
 calc.ind$Site_ID = rep(Site_ID, nrow(calc.ind) / length(Site_ID))
 calc.ind$LAT = rep(LAT, nrow(calc.ind) / length(LAT))
 calc.ind$LON = rep(LON, nrow(calc.ind) / length(LON))
 
+#create column for unique site x winter year combination
 calc.ind$SiteYr = paste(calc.ind$Site_ID, calc.ind$WYear, sep = " ")
 
+#order by winter year and site 
 calc.ind = calc.ind[order(calc.ind$WYear, calc.ind$Site_ID), ]
 
 ####################################################################################
@@ -130,7 +137,7 @@ calc.ind = calc.ind[order(calc.ind$WYear, calc.ind$Site_ID), ]
 thaw = metfin[ , c("SiteYr", "thawday")]
 thaw <- na.omit(thaw)
 
-#count over entire "dormant" season
+#count over entire "dormant" season, which is November 1 to May 31
 count.thaw = thaw %>%
   group_by(SiteYr) %>%
   summarize(count.thaw = sum(thawday))
@@ -183,9 +190,9 @@ count.extremecold = extremecold %>%
 #add to calc.ind
 calc.ind.4 = full_join(calc.ind.3, count.extremecold, by = "SiteYr")
 
-###############
-#HWA KILL DAYS#
-###############
+#######################################
+#Hemlock Wooly Adelgid (HWA) KILL DAYS#
+#######################################
 
 hwaday = metfin[ , c("SiteYr", "hwaday")]
 hwaday <- na.omit(hwaday)
@@ -229,9 +236,10 @@ SMD.3 = full_join(SMD.1, SMD.2, by = "SiteYr")
 #add to calc.ind
 calc.ind.6 = full_join(calc.ind.5, SMD.3, by = "SiteYr")
 
-###########################
-#MODELED SNOW-COVERED DAYS#
-###########################
+#####################################################
+#MODELED SNOW-COVERED DAYS simulated from hydromad in
+#Northern_Forest_SWE_modeling.R script
+#####################################################
 
 modSCD = metfin[ , c("SiteYr", "modSCD")]
 modSCD <- na.omit(modSCD)
@@ -244,9 +252,10 @@ count.modSCD = modSCD %>%
 #add to calc.ind
 calc.ind.7 = full_join(calc.ind.6, count.modSCD, by = "SiteYr")
 
-##########################
-#MODELED BARE GROUND DAYS#
-##########################
+####################################################
+#MODELED BARE GROUND DAYS simulated from hydromad in
+#Northern_Forest_SWE_modeling.R script
+####################################################
 
 modBGD = metfin[ , c("SiteYr", "modBGD")]
 modBGD <- na.omit(modBGD)
@@ -259,9 +268,10 @@ count.modBGD = modBGD %>%
 #add to calc.ind
 calc.ind.8 = full_join(calc.ind.7, count.modBGD, by = "SiteYr")
 
-###########################
-#MODELED RAIN-ON-SNOW DAYS#
-###########################
+####################################################
+#MODELED RAIN-ON-SNOW DAYSsimulated from hydromad in
+#Northern_Forest_SWE_modeling.R script
+####################################################
 
 modROSD = metfin[ , c("SiteYr", "modROSD")]
 modROSD <- na.omit(modROSD)
@@ -274,9 +284,10 @@ count.modROSD = modROSD %>%
 #add to calc.ind
 calc.ind.9 = full_join(calc.ind.8, count.modROSD, by = "SiteYr")
 
-###############################
-#MODELED BARE GROUND THAW DAYS#
-###############################
+#########################################################
+#MODELED BARE GROUND THAW DAYS simulated from hydromad in
+#Northern_Forest_SWE_modeling.R script
+#########################################################
 
 modBGTD = metfin[ , c("SiteYr", "modBGTD")]
 modBGTD <- na.omit(modBGTD)
@@ -289,9 +300,10 @@ count.modBGTD = modBGTD %>%
 #add to calc.ind
 calc.ind.10 = full_join(calc.ind.9, count.modBGTD, by = "SiteYr")
 
-################################
-#MODELED BARE GROUND FROST DAYS#
-################################
+##########################################################
+#MODELED BARE GROUND FROST DAYS simulated from hydromad in
+#Northern_Forest_SWE_modeling.R script
+##########################################################
 
 modBGFROD = metfin[ , c("SiteYr", "modBGFROD")]
 modBGFROD <- na.omit(modBGFROD)
@@ -307,3 +319,4 @@ calc.ind.11 = full_join(calc.ind.10, count.modBGFROD, by = "SiteYr")
 ####################################################################################
 #write calc.ind.11 table
 write.table(calc.ind.11, "calcfin.csv", sep = ",", na="NA", append=FALSE, col.names=TRUE, row.names = FALSE)
+
